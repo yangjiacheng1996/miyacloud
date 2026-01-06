@@ -1,0 +1,437 @@
+# MiyaCloud Git 命令参考手册
+# 项目地址: https://github.com/yangjiacheng1996/miyacloud
+
+# =============================================================================
+# 1. 基础设置和配置
+# =============================================================================
+
+# 设置用户信息
+git config --global user.name "Your Name"
+git config --global user.email "your.email@example.com"
+
+# 设置默认分支名
+git config --global init.defaultBranch main
+
+# 设置换行符处理（Windows）
+git config --global core.autocrlf true
+
+# 设置换行符处理（Linux/Mac）
+git config --global core.autocrlf input
+
+# 查看当前配置
+git config --list
+
+# =============================================================================
+# 2. 仓库初始化和克隆
+# =============================================================================
+
+# 初始化新仓库
+git init
+
+# 克隆远程仓库
+git clone https://github.com/yangjiacheng1996/miyacloud.git
+
+# 克隆到指定目录
+git clone https://github.com/yangjiacheng1996/miyacloud.git my-project
+
+# 浅克隆（只下载最新版本）
+git clone --depth 1 https://github.com/yangjiacheng1996/miyacloud.git
+
+# =============================================================================
+# 3. 基础文件操作
+# =============================================================================
+
+# 查看工作区状态
+git status
+
+# 查看文件差异
+git diff                    # 工作区与暂存区的差异
+git diff --cached          # 暂存区与仓库的差异
+git diff HEAD              # 工作区与仓库的差异
+
+# 添加文件到暂存区
+git add filename           # 添加指定文件
+git add .                  # 添加所有文件
+git add -A                 # 添加所有文件（包括删除的）
+git add -u                 # 添加被修改和被删除的文件，不包括新文件
+
+# 移除文件
+git rm filename            # 从工作区和暂存区删除
+git rm --cached filename   # 只从暂存区删除，保留工作区文件
+git mv oldname newname     # 重命名文件
+
+# =============================================================================
+# 4. 提交操作
+# =============================================================================
+
+# 提交变更
+git commit -m "commit message"
+git commit -am "message"   # 直接提交已跟踪的文件（跳过暂存区）
+
+# 修改最后一次提交
+git commit --amend -m "new message"
+
+# 修改最后一次提交但保持原时间戳
+git commit --amend --no-edit
+
+# 撤销最后一次提交，保留变更
+git reset --soft HEAD~1
+
+# 撤销最后一次提交，丢弃变更
+git reset --hard HEAD~1
+
+# =============================================================================
+# 5. 分支管理
+# =============================================================================
+
+# 查看分支
+git branch                 # 查看本地分支
+git branch -a              # 查看所有分支（包括远程）
+git branch -r              # 查看远程分支
+
+# 创建分支
+git branch new-branch      # 创建新分支
+git branch new-branch commit-hash  # 从指定提交创建分支
+
+# 切换分支
+git checkout branch-name
+git switch branch-name     # 新版本推荐
+
+# 创建并切换分支
+git checkout -b new-branch
+git switch -c new-branch   # 新版本推荐
+
+# 删除分支
+git branch -d branch-name          # 安全删除（已合并）
+git branch -D branch-name          # 强制删除
+git push origin --delete branch-name  # 删除远程分支
+
+# =============================================================================
+# 6. 远程仓库操作
+# =============================================================================
+
+# 查看远程仓库
+git remote -v
+
+# 添加远程仓库
+git remote add origin https://github.com/yangjiacheng1996/miyacloud.git
+
+# 修改远程仓库地址
+git remote set-url origin https://github.com/yangjiacheng1996/miyacloud.git
+
+# 删除远程仓库
+git remote remove origin
+
+# 获取远程更新
+git fetch origin
+git fetch --all
+
+# 拉取更新
+git pull origin main
+git pull --rebase origin main
+
+# 推送更新
+git push origin main
+git push -u origin main     # 首次推送并设置上游分支
+
+# 强制推送（谨慎使用）
+git push --force origin main
+git push --force-with-lease origin main  # 更安全的强制推送
+
+# =============================================================================
+# 7. 查看历史和日志
+# =============================================================================
+
+# 查看提交历史
+git log
+git log --oneline          # 单行显示
+git log --graph            # 图形化显示
+git log --oneline --graph --all  # 完整的图形化历史
+
+# 查看特定文件的提交历史
+git log --follow filename
+
+# 查看某人的提交
+git log --author="author name"
+
+# 查看日期范围内的提交
+git log --since="2 weeks ago"
+git log --until="2023-01-01"
+
+# 查看文件变更统计
+git log --stat
+
+# 查看两个分支的差异
+git log branch1..branch2
+
+# =============================================================================
+# 8. 差异比较
+# =============================================================================
+
+# 比较分支
+git diff branch1 branch2
+git diff branch1..branch2   # 等价于上面的命令
+
+# 比较工作区和某分支
+git diff branch-name
+
+# 比较暂存区和某分支
+git diff --cached branch-name
+
+# 只显示文件名
+git diff --name-only
+git diff --name-status
+
+# =============================================================================
+# 9. 撤销和恢复操作
+# =============================================================================
+
+# 撤销工作区修改
+git checkout -- filename
+git restore filename        # 新版本
+
+# 撤销暂存区操作
+git reset HEAD filename
+git restore --staged filename  # 新版本
+
+# 撤销到某个提交
+git reset --hard commit-hash
+git reset --soft commit-hash
+git reset --mixed commit-hash  # 默认
+
+# 创建新提交来撤销某个提交
+git revert commit-hash
+
+# 恢复误删的分支
+git reflog                 # 查看操作历史
+git checkout -b new-branch commit-hash
+
+# =============================================================================
+# 10. 合并操作
+# =============================================================================
+
+# 合并分支
+git merge branch-name
+git merge --no-ff branch-name   # 不使用快进合并
+
+# 合并并提交
+git merge --no-ff branch-name -m "merge message"
+
+# 合并但暂停（用于解决冲突）
+git merge branch-name --no-commit
+
+# 取消合并
+git merge --abort
+
+# =============================================================================
+# 11. 冲突解决
+# =============================================================================
+
+# 查看冲突文件
+git status
+
+# 解决冲突后标记为已解决
+git add filename
+
+# 使用合并工具
+git mergetool
+
+# 手动编辑冲突文件，删除冲突标记后重新添加
+
+# =============================================================================
+# 12. 变基操作（Rebase）
+# =============================================================================
+
+# 变基到目标分支
+git rebase main
+
+# 交互式变基（压缩、修改提交等）
+git rebase -i HEAD~3        # 对最近3个提交进行交互式变基
+
+# 变基时遇到冲突解决后继续
+git rebase --continue
+
+# 跳过当前提交
+git rebase --skip
+
+# 取消变基
+git rebase --abort
+
+# =============================================================================
+# 13. 储藏操作（Stash）
+# =============================================================================
+
+# 储藏当前工作状态
+git stash
+git stash push -m "message"
+
+# 查看储藏列表
+git stash list
+
+# 应用储藏
+git stash apply            # 应用但不删除
+git stash pop              # 应用并删除
+git stash apply stash@{0}  # 应用指定储藏
+
+# 删除储藏
+git stash drop stash@{0}
+git stash clear            # 清空所有储藏
+
+# =============================================================================
+# 14. 标签管理
+# =============================================================================
+
+# 创建标签
+git tag v1.0.0
+git tag v1.0.0 -m "Release version 1.0.0"
+git tag v1.0.0 commit-hash
+
+# 查看标签
+git tag
+git tag -l "v1.*"
+
+# 查看标签详情
+git show v1.0.0
+
+# 推送标签到远程
+git push origin v1.0.0
+git push origin --tags     # 推送所有标签
+
+# 删除标签
+git tag -d v1.0.0          # 删除本地标签
+git push origin :refs/tags/v1.0.0  # 删除远程标签
+
+# =============================================================================
+# 15. 子模块操作
+# =============================================================================
+
+# 添加子模块
+git submodule add https://github.com/user/repo.git path/to/submodule
+
+# 初始化并更新子模块
+git submodule init
+git submodule update
+git submodule update --init --recursive
+
+# 递归克隆包含子模块的仓库
+git clone --recursive https://github.com/yangjiacheng1996/miyacloud.git
+
+# 在子模块中操作
+cd path/to/submodule
+git checkout main
+git pull
+
+# 更新所有子模块
+git submodule update --remote
+
+# 移除子模块
+git submodule deinit path/to/submodule
+git rm path/to/submodule
+
+# =============================================================================
+# 16. 高级操作
+# =============================================================================
+
+# 樱桃选择（选择性地应用提交）
+git cherry-pick commit-hash
+git cherry-pick --no-commit commit-hash
+
+# 查找提交者
+git blame filename
+
+# 查看文件的历史记录
+git log --follow -- filename
+
+# 清理未跟踪的文件
+git clean -n              # 预览（不会实际删除）
+git clean -f              # 删除未跟踪的文件
+git clean -fd             # 删除未跟踪的文件和目录
+
+# 压缩仓库
+git gc
+git gc --aggressive
+
+# 查找大文件
+git rev-list --objects --all | git cat-file --batch-check='%(objecttype) %(objectname) %(objectsize) %(rest)' | grep '^blob' | sort -k3 -n | tail -10
+
+# =============================================================================
+# 17. 常用别名设置
+# =============================================================================
+
+git config --global alias.st status
+git config --global alias.co checkout
+git config --global alias.br branch
+git config --global alias.ci commit
+git config --global alias.unstage 'reset HEAD --'
+git config --global alias.last 'log -1 HEAD'
+
+# 使用别名
+git st                    # 等价于 git status
+git co -b new-branch      # 等价于 git checkout -b new-branch
+git unstage file          # 等价于 git reset HEAD file
+
+# =============================================================================
+# 18. 清理和维护
+# =============================================================================
+
+# 清理不需要的文件
+git prune
+git gc --prune=now
+
+# 检查仓库完整性
+git fsck
+
+# 显示仓库统计
+git count-objects -vH
+
+# =============================================================================
+# 19. 项目特定操作
+# =============================================================================
+
+# 设置上游分支
+git branch --set-upstream-to=origin/main main
+
+# 创建发布分支
+git checkout -b release/v1.0.0
+git checkout main
+git merge release/v1.0.0
+git tag v1.0.0
+git branch -d release/v1.0.0
+
+# 功能分支工作流
+git checkout -b feature/new-feature
+git checkout main
+git merge feature/new-feature
+git branch -d feature/new-feature
+
+# =============================================================================
+# 20. 快速参考
+# =============================================================================
+
+# 日常开发流程
+git status
+git add .
+git commit -m "commit message"
+git push origin main
+
+# 更新本地仓库
+git fetch origin
+git pull origin main
+
+# 创建新功能
+git checkout -b feature/feature-name
+# 开发完成后
+git checkout main
+git pull origin main
+git merge feature/feature-name
+git branch -d feature/feature-name
+git push origin main
+
+# =============================================================================
+# 注意事项：
+# 1. 在执行 destructive 操作前（如 reset --hard, force push），请确保已备份
+# 2. 强制推送前最好与团队成员沟通
+# 3. 定期运行 git gc 保持仓库性能
+# 4. 使用 .gitignore 文件避免提交不必要的文件
+# 5. 保持提交信息清晰、简洁且有描述性
+# =============================================================================

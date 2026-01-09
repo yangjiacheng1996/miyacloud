@@ -1,246 +1,45 @@
-# Kolla-Ansible 网络平面配置详解
+# Kolla-Ansible 网络配置指南
 
-## 概述
+本指南将帮助您配置Kolla以满足生产环境需求。它旨在解答关于Kolla基本配置选项的一些问题本文档还包含其他有用的参考信息。
 
-Kolla-Ansible 是 OpenStack 的容器化部署工具，它将 OpenStack 各个服务封装在 Docker 容器中，通过 Ansible 进行自动化部署。在部署过程中，Kolla-Ansible 会创建多个独立的网络平面（Network Plane），每个网络平面负责特定类型的流量，以实现网络隔离和安全管理。
+## 节点类型及其运行的服务
 
-本文档详细介绍 Kolla-Ansible 支持的网络平面类型、作用以及如何在 `globals.yml` 中进行配置。
+基本的Kolla清单由多种类型的节点组成，在Ansible中称为"组"：
 
-## 网络平面类型
+- **控制节点** - 云控制节点，托管API和数据库等控制服务。该组应为奇数个节点以实现仲裁。
+- **网络节点** - 托管Neutron代理以及haproxy/keepalived的节点。这些节点将具有在`kolla_internal_vip_address`中定义的浮动IP。
+- **计算节点** - 用于计算服务的节点。客户虚拟机运行在此类节点上。
+- **存储节点** - 用于cinder-volume和LVM的存储节点。
+- **监控节点** - 托管监控服务的监控节点。
 
-Kolla-Ansible 总共包含 **6 个主要网络平面**，每个平面都有其特定的用途和配置要求：
+## 网络配置
 
-| 网络平面 | 默认值 | 用途 |
-|---------|--------|------|
-| `network_interface` | 无（必配） | 基础接口，为其他接口提供默认值 |
-| `api_interface` | `network_interface` | 管理网络，用于 OpenStack 服务间通信 |
-| `tunnel_interface` | `network_interface` | 隧道网络，用于 VXLAN/GRE 封装流量 |
-| `neutron_external_interface` | 无（必配） | 外部网络，用于 Neutron 浮动 IP 和提供商网络 |
-| `docker_interface` | `network_interface` | Docker 内部网络，用于容器间通信 |
-| `storage_interface` | `network_interface` | 存储网络，用于 Ceph、iSCSI 等存储流量 |
+### 接口配置
 
-### 1. network_interface（基础接口）
+在Kolla中，操作员应配置以下网络接口：
 
-**用途**：作为其他网络接口的默认回退值，本身不直接使用。
+- **`network_interface`** - 虽然它本身不被使用，但为以下其他接口提供所需的默认值。
+- **`api_interface`** - 此接口用于管理网络。管理网络是OpenStack服务之间相互通信以及与数据库通信的网络。这里存在已知的安全风险，因此建议将此网络设为内部网络，不从外部访问。默认为`network_interface`。
+- **`kolla_external_vip_interface`** - 这是面向公众的接口。当您希望HAProxy公共端点暴露在不同于内部端点的网络中时使用此接口。当`kolla_enable_tls_external`设置为yes时，必须设置此选项。默认为`network_interface`。
+- **`tunnel_interface`** - Neutron用于通过隧道网络（如VxLan）进行虚拟机到虚拟机通信的接口。默认为`network_interface`。
+- **`neutron_external_interface`** - Neutron需要的接口。Neutron将在其上放置br-ex。它将用于扁平网络以及标记的VLAN网络。必须单独设置。
+- **`dns_interface`** - Designate和Bind9需要的接口。用于面向公众的DNS请求以及对bind9和designate mDNS服务的查询。默认为`network_interface`。
+- **`bifrost_network_interface`** - Bifrost需要的接口。用于配置裸金属云主机，需要与裸金属云主机具有L2连接性，以便提供带PXE引导选项的DHCP租约。默认为`network_interface`。
 
-**配置示例**：
-```yaml
-# /etc/kolla/globals.yml
-network_interface: "eth0"
-```
+### 地址族配置（IPv4/IPv6）
 
-### 2. api_interface（API 管理网络）
+从Train版本开始，Kolla Ansible允许操作员使用IPv6而非IPv4部署控制平面。每个Kolla Ansible网络（由接口表示）提供两种地址族的选择。内部和外部VIP地址都可以使用IPv6地址进行配置。IPv6在所有支持的平台上都经过测试。
 
-**用途**：OpenStack 服务之间的内部通信网络，包括数据库连接、服务间 API 调用等。这是 OpenStack 控制平面的核心网络。
+> **警告**
+> 虽然Kolla Ansible Train需要Ansible 2.6或更高版本，但IPv6支持需要Ansible 2.8或更高版本，因为存在一个bug：https://github.com/ansible/ansible/issues/63227
 
-**配置示例**：
-```yaml
-api_interface: "{{ network_interface }}"
-# 或自定义
-api_interface: "eth1"
-```
+> **注意**
+> 目前不支持双栈。IPv4只能与IPv6在不同网络上混合使用。此约束源于服务需要通用单一地址族寻址。
 
-### 3. tunnel_interface（隧道网络）
+例如，`network_address_family`接受`ipv4`或`ipv6`作为其值，并为所有网络定义默认地址族，类似于`network_interface`定义默认接口的方式。类似地，`api_address_family`更改API网络的地址族。当前网络列表可在`globals.yml`文件中找到。
 
-**用途**：Neutron 组件用于处理虚拟机之间的隧道流量，支持 VXLAN 和 GRE 封装。在计算节点和网络节点上用于创建隧道端点。
-
-**配置示例**：
-```yaml
-tunnel_interface: "{{ network_interface }}"
-# 或自定义
-tunnel_interface: "eth2"
-```
-
-### 4. neutron_external_interface（外部网络接口）
-
-**用途**：Neutron 外部网络接口，用于：
-- 浮动 IP（Floating IP）流量
-- 提供商网络（Provider Networks）
-- 外部网关流量
-
-此接口上会创建 `br-ex` 网桥。
-
-**配置示例**：
-```yaml
-neutron_external_interface: "eth3"
-```
-
-**重要**：此接口不能是已配置的 IP 接口，应该是物理网卡或未配置 IP 的接口。
-
-### 5. docker_interface（Docker 网络接口）
-
-**用途**：Docker 内部网络，用于 Kolla 容器之间的通信。通常配置在独立的网段上。
-
-**配置示例**：
-```yaml
-docker_interface: "{{ network_interface }}"
-# 或自定义（推荐使用独立接口）
-docker_interface: "docker0"
-```
-
-### 6. storage_interface（存储网络接口）
-
-**用途**：存储流量专用网络，用于：
-- Ceph 集群通信
-- iSCSI 流量
-- NFS 存储流量
-- Cinder 块存储流量
-
-**配置示例**：
-```yaml
-storage_interface: "{{ network_interface }}"
-# 或自定义
-storage_interface: "eth4"
-```
-
-## globals.yml 完整配置示例
-
-以下是生产环境推荐的 `globals.yml` 网络配置示例：
-
-```yaml
-# /etc/kolla/globals.yml
-
-# ========== 网络接口配置 ==========
-
-# 基础网络接口（所有其他接口的默认值）
-network_interface: "eth0"
-
-# API 管理网络（服务间通信）
-api_interface: "{{ network_interface }}"
-# api_interface: "eth1"  # 可选：使用独立接口
-
-# 隧道网络（VXLAN/GRE 流量）
-tunnel_interface: "{{ network_interface }}"
-# tunnel_interface: "eth2"  # 可选：使用独立接口
-
-# Neutron 外部网络接口（浮动 IP 和提供商网络）
-neutron_external_interface: "eth3"
-
-# Docker 内部网络
-docker_interface: "{{ network_interface }}"
-# docker_interface: "docker0"  # 默认使用 docker0 网桥
-
-# 存储网络（存储流量）
-storage_interface: "{{ network_interface }}"
-# storage_interface: "eth4"  # 可选：使用独立接口
-
-# ========== VIP 地址配置 ==========
-
-# 内部 VIP 地址（用于 OpenStack 服务访问）
-kolla_internal_vip_address: "192.168.1.250"
-
-# 外部 VIP 地址（用于外部访问 Dashboard 等）
-kolla_external_vip_address: "10.0.0.250"
-
-# 外部网络接口（用于 VIP）
-kolla_external_vip_interface: "{{ neutron_external_interface }}"
-# kolla_external_vip_interface: "eth3"
-
-# ========== 隧道网络配置 ==========
-
-# 隧道类型（vxlan 或 gre）
-neutron隧道类型: "vxlan"
-
-# 隧道端口范围
-neutron_tunneling_port_range: "8472"
-```
-
-## 独立网络平面配置示例
-
-对于生产环境，建议使用独立网络接口以实现更好的隔离：
-
-```yaml
-# /etc/kolla/globals.yml
-
-# 独立网络平面配置
-network_interface: "eth0"           # 管理基础
-api_interface: "eth1"               # API 管理网络 - 192.168.10.0/24
-tunnel_interface: "eth2"            # 隧道网络 - 192.168.20.0/24
-neutron_external_interface: "eth3"  # 外部网络 - 物理网络
-docker_interface: "docker0"         # Docker 网络 - 172.17.0.0/16
-storage_interface: "eth4"           # 存储网络 - 192.168.50.0/24
-
-# VIP 配置
-kolla_internal_vip_address: "192.168.10.250"
-kolla_external_vip_address: "10.0.0.250"
-kolla_external_vip_interface: "eth3"
-
-# Neutron 配置
-neutron_plugin_agent: "openvswitch"
-neutron_external_interface: "eth3"
-```
-
-## 网络平面与 OpenStack 服务的关系
-
-| 网络平面 | 相关 OpenStack 服务 | 流量类型 |
-|---------|-------------------|---------|
-| api_interface | Keystone, Nova, Neutron, Cinder | API 调用、数据库连接 |
-| tunnel_interface | Neutron | VXLAN/GRE 隧道流量 |
-| neutron_external_interface | Neutron | 浮动 IP、路由流量 |
-| storage_interface | Cinder, Glance, Nova | 块存储、镜像存储 |
-| docker_interface | 所有容器化服务 | 容器间控制流量 |
-
-## 常见配置场景
-
-### 场景 1：All-in-One 部署
-
-```yaml
-# 单节点部署简化配置
-network_interface: "eth0"
-neutron_external_interface: "eth0"  # 使用同一接口
-kolla_internal_vip_address: "192.168.1.100"
-```
-
-### 场景 2：多节点生产部署
-
-```yaml
-# 生产环境完整配置
-network_interface: "eno1"
-api_interface: "eno2"
-tunnel_interface: "eno3"
-neutron_external_interface: "eno4"
-docker_interface: "docker0"
-storage_interface: "eno5"
-
-kolla_internal_vip_address: "10.10.10.250"
-kolla_external_vip_address: "203.0.113.250"
-```
-
-### 场景 3：IPv6 配置
-
-```yaml
-# IPv6 配置示例
-network_interface: "eth0"
-api_interface: "eth0"
-tunnel_interface: "eth0"
-neutron_external_interface: "eth1"
-
-# IPv6 VIP 配置
-kolla_internal_vip_address: "fd00::250"
-kolla_external_vip_address: "2001:db8::250"
-```
-
-## 配置验证
-
-部署前可以使用以下命令验证网络配置：
-
-```bash
-# 检查 kolla-ansible 的网络配置
-kolla-ansible prechecks -e @/etc/kolla/globals.yml
-
-# 查看网络配置清单
-kolla-ansible inventory -e @/etc/kolla/globals.yml
-```
-
-## 注意事项
-
-1. **接口顺序**：确保正确配置接口顺序，先配置 `network_interface`，再配置其他接口
-2. **IP 配置**：`neutron_external_interface` 不应配置 IP 地址
-3. **接口独立性**：生产环境建议每个网络平面使用独立物理接口
-4. **网段规划**：提前规划好各个网络平面的网段，避免冲突
-5. **VLAN 标记**：如果使用 VLAN，需要确保物理接口支持 VLAN 标记
-
-## 相关文档
-
-- [Kolla-Ansible 官方文档](https://docs.openstack.org/kolla-ansible/latest/)
-- [OpenStack 网络指南](https://docs.openstack.org/neutron/latest/)
+> **注意**
+> 虽然Train版本中引入的IPv6支持范围很广，但已知某些服务尚无法与IPv6一起使用或存在一些已知问题：
+> - Bifrost不支持IPv6：https://storyboard.openstack.org/#!/story/2006689
+> - Docker不允许IPv6注册表地址：https://github.com/moby/moby/issues/39033 - 解决方法是使用主机名
+> - Ironic DHCP服务器dnsmasq目前无法自动配置为提供DHCPv6：https://bugs.launchpad.net/kolla-ansible/+bug/1848454
